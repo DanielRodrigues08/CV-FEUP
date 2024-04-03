@@ -3,6 +3,8 @@ import numpy as np
 from utils import equalize_hist_wrapper
 import math
 import copy
+from utils import display_images
+import sys
 
 SAME_COLOR_THRESHOLD = 110
 SAME_COLOR_THRESHOLD2 = 40
@@ -11,18 +13,19 @@ MIN_POINTS_COLOR = 0.35
 PRECISION = 10
 
 colors_hue = {
-    "red": 5,
-    "orange": 21,
-    "yellow": 35,
-    "lime": 45,
-    "green": 70,
-    "turquoise": 87,
-    "cyan": 100,
-    "coral": 110,
-    "blue": 125,
-    "purple": 135,
-    "magenta": 155,
-    "pink": 165,
+    "red": (0, 5),
+    "red1": (166, 180),
+    "orange": (6, 21),
+    "yellow": (22, 35),
+    "lime": (36, 45),
+    "green": (46, 70),
+    "turquoise": (71, 87),
+    "cyan": (88, 100),
+    "coral": (101, 110),
+    "blue": (111, 125),
+    "purple": (124, 135),
+    "magenta": (136, 155),
+    "pink": (156, 165),
 }
 
 
@@ -125,7 +128,7 @@ def clear_clusters(image, clusters, ratio):
     return clusters
 
 
-def create_clusters(mask, bbs):
+def create_clusters(img, bbs):
     clusters = []
 
     for bb in bbs:
@@ -134,12 +137,11 @@ def create_clusters(mask, bbs):
 
         for i in range(x, x + w, PRECISION):
             for j in range(y, y + h, PRECISION):
-                if (
-                    mask[j][i][0] != 0 or mask[j][i][1] != 0 or mask[j][i][2] != 0
-                ):  # TODO: Change this
+                r, g, b = img[j][i]
+                if r != 0 or g != 0 or b != 0:
                     cluster.append((j, i))
 
-        clusters.append(cluster)
+        clusters.append((cluster, bb))
 
     return clusters
 
@@ -162,10 +164,18 @@ def color_scan(
     clusters, image, min_points_color=MIN_POINTS_COLOR, colors_hue=colors_hue
 ):
     c = 0
-    full_colors = []
+    full_colors = set()
     image_hsv = cv2.cvtColor(image, cv2.COLOR_BGR2HSV)
+    final_mask = np.zeros(image.shape[:2], np.uint8)
 
-    for cluster in clusters:
+    for item in clusters:
+        cluster, bb = item
+
+        x_bb, y_bb, w_bb, h_bb = bb
+
+        bb_img = image_hsv[y_bb : y_bb + h_bb, x_bb : x_bb + w_bb].copy()
+        temp_mask = np.zeros((h_bb, w_bb), np.uint8)
+
         colors = []
         colors_dict = {
             "red": [0, 0],
@@ -177,7 +187,7 @@ def color_scan(
             "cyan": [0, 0],
             "coral": [0, 0],
             "blue": [0, 0],
-            "purple": [0, 0],
+            "purple": [0, 0],  # create a mask for the bb
             "magenta": [0, 0],
             "pink": [0, 0],
             "white": [0, 0],
@@ -185,13 +195,16 @@ def color_scan(
         for x, y in cluster:
             h, s, v = image_hsv[x][y]
             for color in colors_hue:
+                if color == "red1":
+                    continue
+
                 if s <= 60:
                     if v >= 60:
                         colors_dict["white"][0] += 1
                     else:
                         colors_dict["white"][1] += 1
                     break
-                if h <= colors_hue[color]:
+                if h <= colors_hue[color][1]:
                     if v >= 60:
                         colors_dict[color][0] += 1
                     else:
@@ -203,6 +216,7 @@ def color_scan(
                     else:
                         colors_dict["red"][1] += 1
                     break
+
         for color in colors_dict:
             bright, dark = colors_dict[color]
 
@@ -210,18 +224,43 @@ def color_scan(
                 colors.append(color)
 
             if dark >= len(cluster) * min_points_color:
-                if color == "white":
-                    colors.append("black")
-                else:
-                    colors.append(f"dark {color}")
+                colors.append("black" if color == "white" else f"dark {color}")
+
+        for color in colors:
+            dark_color = color.startswith("dark")
+            color_name = color.split(" ")[1] if dark_color else color
+
+            if color_name == "white":
+                lower_limit = np.array([0, 0, 60])
+                upper_limit = np.array([180, 60, 255])
+            elif color_name == "black":
+                lower_limit = np.array([0, 0, 0])
+                upper_limit = np.array([180, 60, 60])
+            else:
+                lower_limit = np.array(
+                    [colors_hue[color_name][0], 0 if dark_color else 60, 0]
+                )
+                upper_limit = np.array(
+                    [colors_hue[color_name][1], 60 if dark_color else 255, 255]
+                )
+
+            mask_color = cv2.inRange(bb_img, lower_limit, upper_limit)
+            if color_name == "red":
+                lower_limit[0] = colors_hue["red1"][0]
+                upper_limit[0] = colors_hue["red1"][1]
+                mask_color = cv2.bitwise_or(
+                    mask_color, cv2.inRange(bb_img, lower_limit, upper_limit)
+                )
+
+            temp_mask = cv2.bitwise_or(mask_color, temp_mask)
+
+        final_mask[y_bb : y_bb + h_bb, x_bb : x_bb + w_bb] = temp_mask
 
         c += max(1, len(colors) - 1)
 
-        for color in colors:
-            if color not in full_colors:
-                full_colors.append(color)
+        full_colors.update(colors)
 
-    return c, len(full_colors)
+    return c, len(full_colors), final_mask
 
 
 """
@@ -348,6 +387,19 @@ def resize_image(image, height=800):
     return image
 
 
+def create_bounding_boxes(mask, img):
+    img_with_bbs = img.copy()
+
+    contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    bbs = [cv2.boundingRect(contour) for contour in contours]
+
+    for bb in bbs:
+        x, y, w, h = bb
+        cv2.rectangle(img_with_bbs, (x, y), (x + w, y + h), (0, 0, 255), 5)
+
+    return bbs, img_with_bbs
+
+
 def main(image_path):
 
     # 1. Load the image
@@ -368,10 +420,14 @@ def main(image_path):
     clusters = create_clusters(result, bbs)
 
     # 5. Scan clusters and determine their dominant colors
-    n = color_scan(clusters, result)
+    num_clusters, num_colors, mask = color_scan(clusters, result)
 
-    print(n)
+    bbs, img_with_bbs = create_bounding_boxes(mask, original_image)
+
+    display_images([img_with_bbs], ["Bounding Boxes"])
+
+    print(num_clusters)
 
 
 if __name__ == "__main__":
-    main("4.jpg")
+    main(sys.argv[1])
