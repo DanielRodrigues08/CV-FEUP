@@ -1,0 +1,21 @@
+a) What is the shape (width, height and # of channels) of the output tensor after the first convolution layer?
+- 28x28 => 26x26 (por causa do kernel size = 3 remove 1 linha e 1 coluna de cada lado)
+- aplicados 32 filters
+
+answer: 26 de altura e largura e 32 channels
+
+
+b) And after the first 3 layers (convolution+convolution+pooling)?
+2nd convulution layer:
+	- o 26x26 passa para 24x24 (por causa do kernel size = 3 remove 1 linha e 1 coluna de cada lado)
+	- continuam os 32 filters
+
+dimensions output: 24x24x32
+
+pooling:
+	- maxpooling diminui dimensoes para metade => 12x12
+	- 32 filters
+
+c) How many parameters (weights) does the model have?
+	(k*k * input_channels +1) * output_channels
+	neste caso: (3*3+1)*32=320
