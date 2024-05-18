@@ -24,18 +24,11 @@ import numpy as np
 import matplotlib.pyplot as plt
 random.seed(42)
 
-from google.colab import drive
-drive.mount('/content/drive')
+base_folder = "../"
 
-!cp /content/drive/Shareddrives/VC/datasets.zip /content
-!mkdir -p /content/data
-!unzip -q /content/datasets.zip -d /content/data
-
-base_folder = "/content/data"
-
-models_folder = "/content/drive/Shareddrives/VC" + "/models/"
-plot_data = "/content/drive/Shareddrives/VC" + "/plot_data/"
-image_paths_file = "/content/drive/Shareddrives/VC" + "/image_paths.txt"
+models_folder = base_folder + "/models/"
+plot_data = base_folder + "/plot_data/"
+image_paths_file = base_folder + "/image_paths.txt"
 
 if not os.path.exists(models_folder):
     os.makedirs(models_folder)
@@ -121,7 +114,7 @@ class LegoDataset(Dataset):
 
         return image, label
 
-batch_size = 64
+batch_size = 32
 num_workers = 0
 image_size = (520, 390)
 train_size = 0.7
@@ -260,7 +253,8 @@ best_model_file = f'{models_folder}best_model.pth'
 print("Continue previous training or start new one?")
 print("1: Continue")
 print("2: Start new one")
-choice = input()
+#choice = input()
+choice = "2"
 
 model = CustomCNN()
 criterion = nn.MSELoss()
@@ -328,7 +322,7 @@ for t in range(epoch, num_epochs):
     save_dict_to_file(train_history, train_history_file)
     save_dict_to_file(val_history, val_history_file)
 
-    plotTrainingHistory(train_history, val_history)
+plotTrainingHistory(train_history, val_history)
 
 print("Finished")
 
