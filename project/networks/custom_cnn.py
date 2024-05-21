@@ -114,7 +114,7 @@ class LegoDataset(Dataset):
 
         return image, label
 
-batch_size = 64
+batch_size = 32
 num_workers = 2
 image_size = (520, 390)
 train_size = 0.7
@@ -182,7 +182,7 @@ class CustomCNN(nn.Module):
         x = self.dropout(x)
         x = torch.flatten(x, start_dim=1)
         x = self.fc1(x)
-        return x.squeeze(1).round()
+        return x.squeeze(1)
 
 def summarize():
   model = CustomCNN()
@@ -264,7 +264,7 @@ choice = '2'
 model = CustomCNN()
 criterion = nn.MSELoss()
 optimizer = optim.Adam(model.parameters(), lr=0.001)
-num_epochs = 30
+num_epochs = 100
 epoch=0
 train_history = {'loss': [], 'accuracy': []}
 val_history = {'loss': [], 'accuracy': []}
@@ -331,8 +331,6 @@ for t in range(epoch, num_epochs):
     scheduler.step(val_loss)
     print(f"Learning rate: {optimizer.param_groups[0]['lr']}")
 
-plotTrainingHistory(train_history, val_history)
-
 print("Finished")
 
 """Test the model"""
@@ -343,3 +341,5 @@ model.load_state_dict(checkpoint['model'])
 
 test_loss, test_acc = epoch_iter(test_dataloader, model, criterion, is_train=False)
 print(f'\nTest Loss: {test_loss:.3f} \nTest Accuracy: {test_acc:.3f}')
+
+plotTrainingHistory(train_history, val_history)
