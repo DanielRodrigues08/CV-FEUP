@@ -283,8 +283,8 @@ print("2: Start new one")
 choice='2'
 model = CustomCNN()
 criterion = nn.MSELoss()
-optimizer = optim.Adam(model.parameters(), lr=0.001)
-num_epochs = 50
+optimizer = optim.Adam(model.parameters(), lr=0.0001)
+num_epochs = 80
 epoch=0
 train_history = {'loss': [], 'accuracy': []}
 val_history = {'loss': [], 'accuracy': []}
